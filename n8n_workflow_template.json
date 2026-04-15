@@ -1,0 +1,175 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "path": "upload-image",
+        "options": {}
+      },
+      "id": "1",
+      "name": "Webhook (Upload)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "fetch-images",
+        "options": {}
+      },
+      "id": "12",
+      "name": "Webhook (Fetch)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 100]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "update-feedback",
+        "options": {}
+      },
+      "id": "13",
+      "name": "Webhook (Feedback)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 700]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "sheetId": "YOUR_GOOGLE_SHEETS_ID",
+        "range": "Sheet1!A:N",
+        "options": {}
+      },
+      "id": "14",
+      "name": "Google Sheets (Read)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [500, 100]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "sheetId": "YOUR_GOOGLE_SHEETS_ID",
+        "range": "Sheet1!A:N",
+        "key": "fileName",
+        "dataMode": "defineExplicilty",
+        "values": {
+          "values": [
+            { "column": "rating", "value": "={{ $json.rating }}" },
+            { "column": "feedback", "value": "={{ $json.feedback }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "15",
+      "name": "Google Sheets (Update Feedback)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [500, 700]
+    },
+    {
+      "parameters": {
+        "formId": "YOUR_GOOGLE_FORM_ID"
+      },
+      "id": "11",
+      "name": "Google Forms Trigger",
+      "type": "n8n-nodes-base.googleFormsTrigger",
+      "typeVersion": 1,
+      "position": [250, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://YOUR_APP_URL/api/classify",
+        "sendBinaryData": true,
+        "binaryPropertyName": "image",
+        "options": {}
+      },
+      "id": "2",
+      "name": "Classify (TM Proxy)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [500, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const map = {\n  'nature': 'calm, scenic',\n  'food': 'vibrant, appetizing',\n  'people': 'expressive, social',\n  'technology': 'futuristic, sleek'\n};\n\nconst category = items[0].json.category.toLowerCase();\nitems[0].json.knowledgeMap = map[category] || 'professional';\nreturn items;"
+      },
+      "id": "3",
+      "name": "Knowledge Map",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 400]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "message": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "=Analyze this image. Category: {{ $json.category }}. Tone: {{ $json.knowledgeMap }}. Return STRICT JSON: {\"descriptive\": \"...\", \"creative\": \"...\", \"accessibility\": \"...\", \"tags\": [\"tag1\", \"tag2\"]}"
+                },
+                {
+                  "type": "image_url",
+                  "image_url": {
+                    "url": "=data:image/jpeg;base64,{{ $node[\"Webhook (Upload)\"].json.image }}"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "options": {
+          "responseFormat": "json_object"
+        }
+      },
+      "id": "4",
+      "name": "OpenAI Vision",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [900, 400]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "sheetId": "YOUR_GOOGLE_SHEETS_ID",
+        "range": "Sheet1!A:N",
+        "options": {}
+      },
+      "id": "5",
+      "name": "Google Sheets Store",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [1100, 400]
+    }
+  ],
+  "connections": {
+    "Webhook (Fetch)": {
+      "main": [[{ "node": "Google Sheets (Read)", "type": "main", "index": 0 }]]
+    },
+    "Webhook (Upload)": {
+      "main": [[{ "node": "Classify (TM Proxy)", "type": "main", "index": 0 }]]
+    },
+    "Webhook (Feedback)": {
+      "main": [[{ "node": "Google Sheets (Update Feedback)", "type": "main", "index": 0 }]]
+    },
+    "Google Forms Trigger": {
+      "main": [[{ "node": "Classify (TM Proxy)", "type": "main", "index": 0 }]]
+    },
+    "Classify (TM Proxy)": {
+      "main": [[{ "node": "Knowledge Map", "type": "main", "index": 0 }]]
+    },
+    "Knowledge Map": {
+      "main": [[{ "node": "OpenAI Vision", "type": "main", "index": 0 }]]
+    },
+    "OpenAI Vision": {
+      "main": [[{ "node": "Google Sheets Store", "type": "main", "index": 0 }]]
+    }
+  }
+}
