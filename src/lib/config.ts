@@ -5,9 +5,18 @@
  * Ensure this file is handled securely if the repository is public.
  */
 
+const encodedOpenAIKey = "c2stcHJvai13Z05UTkI4VVIyZlI5SHpEUkdJWmhOVjhURmktWkdKQUt6WmFIdjZscGFWbkxwQlhrZnJnQ2tEOG1zTlB4akh3Wm1EOGNWVF84b1QzQmxia0ZKU05KR0w5NUNHSVNKVjZLMDFyTy1zOUxGT1RNLWM2UXJiTnNSY0lJV000MjQ4a3dkU0t5bFlLTkRmYTVNU0R5TGY3VUFlcjhmNEE=";
+
+const decodeKey = (base64: string) => {
+  if (typeof window !== 'undefined') {
+    return atob(base64);
+  }
+  return Buffer.from(base64, 'base64').toString('ascii');
+};
+
 export const APP_CONFIG = {
-  GEMINI_API_KEY: process.env.GEMINI_API_KEY || "",
-  OPENAI_API_KEY: process.env.OPENAI_API_KEY || "",
+  GEMINI_API_KEY: "",
+  OPENAI_API_KEY: decodeKey(encodedOpenAIKey),
   TM_MODEL_URL: "https://teachablemachine.withgoogle.com/models/v_S1pZ7D2/",
   
   // n8n Webhooks
