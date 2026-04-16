@@ -17,6 +17,23 @@ export interface AIOutput {
   source: string;
 }
 
+const CAPTION_PROMPT = (category: string) => `
+You are a professional content writer and image analyst. Analyze the provided image carefully and return ONLY a valid JSON object — no markdown, no code fences, no extra text.
+
+Category hint: ${category}
+
+Your task:
+1. "descriptive": Write a detailed, factual description of what is LITERALLY visible in this specific image (colors, objects, people, setting, actions, mood). Be concrete and specific — mention exact details unique to THIS image. Avoid vague filler. 2-3 sentences.
+2. "creative": Write a vivid, imaginative, engaging caption for social media. Make it emotionally resonant and distinctive — NOT generic travel/food/lifestyle clichés. It must feel tailored to what makes THIS image unique. 1-2 punchy sentences. Vary your sentence structure and opening word from any previous response.
+3. "accessibility": Write a clear, concise alt-text description for visually impaired users. Start with the most important element. 1 sentence.
+4. "tags": Generate 5–8 highly relevant lowercase hashtag-style tags specific to THIS image content. No generic tags like "photo" or "image".
+
+IMPORTANT: Every response must be fresh and distinct. Do not repeat phrases, sentence structures, or themes across images. Be specific to what you observe.
+
+Return format (and nothing else):
+{"descriptive": "...", "creative": "...", "accessibility": "...", "tags": ["tag1", "tag2", "tag3"]}
+`.trim();
+
 export async function generateAICaptions(
   base64Image: string, 
   category: string,
@@ -24,59 +41,47 @@ export async function generateAICaptions(
 ): Promise<AIOutput> {
   const geminiKey = APP_CONFIG.GEMINI_API_KEY || overrides?.geminiKey || process.env.GEMINI_API_KEY;
   const openaiKey = APP_CONFIG.OPENAI_API_KEY || overrides?.openaiKey || process.env.OPENAI_API_KEY;
+  const prompt = CAPTION_PROMPT(category);
 
-  // 1. Try Google Gemini (High Quality / Often Free)
+  // 1. Try Google Gemini
   if (geminiKey) {
     const dynamicGenAI = new GoogleGenerativeAI(geminiKey);
     const modelsToTry = ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-pro-vision"];
-    const prompt = `Analyze this image. Category: ${category}. Return JSON ONLY: {"descriptive": "factual description", "creative": "engaging story", "accessibility": "alt text", "tags": ["tag1", "tag2"]}`;
 
     for (const modelName of modelsToTry) {
       try {
-        const model = dynamicGenAI.getGenerativeModel({ model: modelName });
+        const model = dynamicGenAI.getGenerativeModel({
+          model: modelName,
+          generationConfig: { temperature: 1.2, topP: 0.95 }
+        });
         const result = await model.generateContent([
           prompt,
-          {
-            inlineData: {
-              data: base64Image,
-              mimeType: "image/jpeg"
-            }
-          }
+          { inlineData: { data: base64Image, mimeType: "image/jpeg" } }
         ]);
         
         const text = result.response.text();
-        // Clean up markdown code blocks if present
         const cleanJson = text.replace(/```json|```/gi, "").trim();
         const aiOutput = JSON.parse(cleanJson);
-        
         return { ...aiOutput, source: `gemini (${modelName})` };
       } catch (err: any) {
         console.warn(`Gemini Warning: Model ${modelName} failed -`, err.message);
-        // Continue to the next model in the array
       }
     }
   }
 
-  // 2. Try OpenAI (Primary)
+  // 2. Try OpenAI GPT-4o Vision
   if (openaiKey) {
     try {
       const dynamicOpenAI = new OpenAI({ apiKey: openaiKey });
       const chatCompletion = await dynamicOpenAI.chat.completions.create({
         model: "gpt-4o",
+        temperature: 1.1,
         messages: [
           {
             role: "user",
             content: [
-              { 
-                type: "text", 
-                text: `Analyze this image. Category: ${category}. Return JSON: {"descriptive": "...", "creative": "...", "accessibility": "...", "tags": ["tag1", "tag2"]}` 
-              },
-              {
-                type: "image_url",
-                image_url: {
-                  url: `data:image/jpeg;base64,${base64Image}`,
-                },
-              },
+              { type: "text", text: prompt },
+              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64Image}`, detail: "high" } },
             ],
           },
         ],
@@ -87,9 +92,7 @@ export async function generateAICaptions(
       return { ...aiOutput, source: "openai-vision" };
     } catch (err: any) {
       console.warn("OpenAI Vision failed...", err.message);
-      if (err.status !== 429) {
-        throw err; // Re-throw if it's not a quota error
-      }
+      if (err.status !== 429) throw err;
     }
   }
 
@@ -101,46 +104,86 @@ export function getSimulatedCaptions(classification: any, fileName: string): AIO
   const { category, heuristics } = classification;
   const { orientation, brightness } = heuristics || {};
 
-  const orientationDesc = orientation === "portrait" ? "elegant vertical frame" : (orientation === "landscape" ? "sweeping panoramic vista" : "perfectly balanced square composition");
-  const lightingDesc = brightness === "dark" ? "moody and dramatic shadows" : (brightness === "light" ? "ethereal, high-key illumination" : "vibrant natural light");
+  // Use a seed based on fileName + timestamp for per-image variety
+  const seed = fileName.split('').reduce((a, c) => a + c.charCodeAt(0), 0) + Date.now() % 997;
+  const pick = <T>(arr: T[]) => arr[(seed + arr.length) % arr.length];
 
-  const creativeVariations = [
-    `A fleeting whisper of time, captured forever within this ${orientationDesc}.`,
-    `Shadows and light dance together, creating a visual symphony of ${lightingDesc}.`,
-    `Beyond the lens lies a story untold, framed by an ${orientationDesc}.`,
-    `Breathing life into the stillness, this shot explores the profound depths of ${category}.`,
-    `An evocative juxtaposition of form and feeling, elevated by ${lightingDesc}.`
+  const orientationDesc = orientation === "portrait"
+    ? pick(["elegant vertical frame", "tall portrait composition", "upright close-up framing"])
+    : orientation === "landscape"
+      ? pick(["sweeping panoramic vista", "wide cinematic frame", "expansive horizontal view"])
+      : pick(["perfectly balanced square composition", "centered square crop", "symmetrical format"]);
+
+  const lightingDesc = brightness === "dark"
+    ? pick(["moody dramatic shadows", "deep low-key tones", "rich chiaroscuro contrast"])
+    : brightness === "light"
+      ? pick(["ethereal high-key illumination", "airy overexposed glow", "clean bright daylight"])
+      : pick(["vibrant natural light", "balanced golden-hour tones", "soft diffused midday light"]);
+
+  const creativePool = [
+    `The kind of moment that stops scrolling cold — raw, real, and entirely its own.`,
+    `Not every frame needs explanation. This one speaks for itself.`,
+    `Light, shadow, and something quietly extraordinary.`,
+    `Details others walk past. You stopped. Good call.`,
+    `This is what ${lightingDesc} does to an ordinary scene — turns it into something else entirely.`,
+    `Framed in ${orientationDesc}, this image holds more than meets the eye.`,
+    `A visual pause in an otherwise fast-moving world.`,
+    `Some images are felt before they are understood.`,
   ];
 
-  const randomCreative = creativeVariations[Math.floor(Math.random() * creativeVariations.length)];
+  const randomCreative = creativePool[(seed * 3 + 7) % creativePool.length];
 
-  const sims: Record<string, any> = {
+  const categoryData: Record<string, any> = {
     "Landscape": {
-      descriptive: `An expansive and breathtaking ${orientationDesc} featuring a lush landscape, enhanced by ${lightingDesc}.`,
-      creative: `Where the earth meets the sky in a timeless embrace. ${randomCreative}`,
-      tags: ["landscape", orientation, "scenic", "horizon"]
+      descriptive: pick([
+        `An expansive ${orientationDesc} of a natural landscape rendered in ${lightingDesc}, with visible depth and texture across the terrain.`,
+        `A wide ${orientationDesc} view capturing the interplay of land and sky under ${lightingDesc}.`,
+        `This ${orientationDesc} landscape scene features layered natural forms illuminated by ${lightingDesc}.`,
+      ]),
+      creative: pick([
+        `The horizon doesn't end here — it opens. ${randomCreative}`,
+        `Earth, sky, and that peculiar silence in between. ${randomCreative}`,
+        `Not a backdrop. A place that existed long before the lens arrived. ${randomCreative}`,
+      ]),
+      tags: ["landscape", orientation, "scenic", "horizon", "outdoors", "nature"]
     },
     "Food": {
-      descriptive: `A delectable close-up shot emphasizing texture and plating, captured in ${lightingDesc}.`,
-      creative: `A culinary masterpiece that tantalizes the senses. ${randomCreative}`,
-      tags: ["food", "culinary", "appetizing", brightness]
+      descriptive: pick([
+        `A close-up food shot emphasizing texture, color, and plating detail under ${lightingDesc}.`,
+        `The dish is composed with deliberate visual intent — textures and garnishes visible in ${lightingDesc}.`,
+        `Food photography captured in ${orientationDesc} with ${lightingDesc}, showcasing culinary craft.`,
+      ]),
+      creative: pick([
+        `Before the first bite, there's this. ${randomCreative}`,
+        `Plated with intention, eaten with abandon. ${randomCreative}`,
+        `The kind of food that makes you forget you were on a diet. ${randomCreative}`,
+      ]),
+      tags: ["food", "culinary", "plating", brightness, "gastronomy", "mealtime"]
     },
     "People": {
-      descriptive: `A striking portrait framed as an ${orientationDesc}, highlighting human emotion and expression.`,
-      creative: `A soul laid bare before the camera, frozen in a moment of pure authenticity. ${randomCreative}`,
-      tags: ["portrait", "human", "emotion", "candid"]
+      descriptive: pick([
+        `A ${orientationDesc} portrait capturing a human subject with visible emotion, framed under ${lightingDesc}.`,
+        `The subject is photographed in ${orientationDesc} with ${lightingDesc} highlighting facial features and expression.`,
+        `A candid or posed human moment rendered in ${orientationDesc} and ${lightingDesc}.`,
+      ]),
+      creative: pick([
+        `Behind the eyes — a whole story the camera almost caught. ${randomCreative}`,
+        `The kind of portrait you come back to. ${randomCreative}`,
+        `Real people. Real light. Real moments. ${randomCreative}`,
+      ]),
+      tags: ["portrait", "people", "emotion", "candid", "human", orientation]
     }
   };
 
-  const selected = sims[category] || {
-    descriptive: `A stunning ${orientationDesc} capturing unique visual patterns, illuminated by ${lightingDesc}.`,
+  const selected = categoryData[category] || {
+    descriptive: `A ${orientationDesc} image with ${lightingDesc}, showcasing distinctive visual elements and composition.`,
     creative: randomCreative,
-    tags: ["creative", "visual", orientation, brightness, category === "Standard" ? "abstract" : (category || "abstract")]
+    tags: ["visual", orientation, brightness, category?.toLowerCase() || "abstract", "photography"]
   };
 
-  return { 
-    ...selected, 
+  return {
+    ...selected,
     accessibility: `A ${orientationDesc} image with ${lightingDesc} showing ${category === "Standard" ? "abstract" : (category?.toLowerCase() || 'abstract')} elements.`,
-    source: 'web (smart-simulator)' 
+    source: 'web (smart-simulator)'
   };
 }
