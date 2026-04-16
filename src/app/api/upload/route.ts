@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
         const geminiKey = req.headers.get("x-gemini-key") || undefined;
         const openaiKey = req.headers.get("x-openai-key") || undefined;
 
-        let aiOutput;
+        let aiOutput: any;
         let aiError = null;
 
         try {
