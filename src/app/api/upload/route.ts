@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { NextRequest, NextResponse } from "next/server";
 import { generateAICaptions, getSimulatedCaptions } from "@/lib/ai-service";
 import { classifyImage, ClassificationResult } from "@/lib/tm-service";
