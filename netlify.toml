@@ -1,12 +1,13 @@
 [build]
-  command = "npm run build"
+  command = "npm ci && npm run build"
   publish = ".next"
 
 [build.environment]
   NODE_VERSION = "20"
+  NPM_FLAGS = "--legacy-peer-deps"
 
 [functions]
-  node_version = "20"
+  node_bundler = "nft"
   external_node_modules = ["canvas"]
 
 [[plugins]]

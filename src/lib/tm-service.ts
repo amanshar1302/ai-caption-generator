@@ -24,7 +24,12 @@ export async function classifyImage(imageBuffer: Buffer, modelUrl: string): Prom
   }
 
   const img = new Image();
-  img.src = imageBuffer;
+  img.src = `data:image/jpeg;base64,${imageBuffer.toString("base64")}`;
+
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve();
+    img.onerror = (err) => reject(err);
+  });
 
   const canvas = createCanvas(img.width, img.height);
   const ctx = canvas.getContext("2d");
