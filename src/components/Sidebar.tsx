@@ -2,74 +2,72 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Image, Upload, Settings } from "lucide-react";
+import { LayoutDashboard, Image as ImageIcon, Clock, Map } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogTrigger 
-} from "@/components/ui/dialog";
-import { ApiKeySettings } from "@/components/ApiKeySettings";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/" },
-  { icon: Image, label: "Gallery", href: "/gallery" },
-  { icon: Upload, label: "Add Images", href: "/upload" },
+  { icon: ImageIcon, label: "Image Gallery", href: "/gallery" },
+  { icon: Clock, label: "Caption History", href: "/history" },
+  { icon: Map, label: "Knowledge Map", href: "/knowledge" },
 ];
 
-export function Sidebar() {
+export function Sidebar({ divider = false }: { divider?: boolean }) {
   const pathname = usePathname();
 
   return (
-    <div className="w-64 h-full glass border-r flex flex-col p-6 z-20">
-      <div className="flex items-center gap-3 mb-10 px-2">
-        <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shadow-lg shadow-primary/20">
-          <Image className="text-white w-5 h-5" />
-        </div>
-        <span className="font-bold text-xl tracking-tight gradient-text">PixAI</span>
+    <div className={cn(
+      "w-72 h-full bg-white flex flex-col z-20 transition-all",
+      divider && "border-r border-gray-100 shadow-sm"
+    )}>
+      <div className="p-8 pb-10">
+        <h1 className="text-[28px] font-black tracking-tighter text-black leading-tight">
+          SmartCaption
+        </h1>
+        <p className="text-gray-400 text-sm font-medium mt-0.5 tracking-tight">
+          AI Image Analysis
+        </p>
       </div>
 
-      <nav className="flex-1 space-y-2">
-        {menuItems.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={cn(
-              "flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group",
-              pathname === item.href
-                ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
-                : "text-muted-foreground hover:bg-white/5 hover:text-white"
-            )}
-          >
-            <item.icon className={cn("w-5 h-5 transition-transform group-hover:scale-110", pathname === item.href ? "text-white" : "text-muted-foreground")} />
-            <span className="font-medium">{item.label}</span>
-          </Link>
-        ))}
+      <nav className="flex-1 px-0">
+        {menuItems.map((item) => {
+          const isActive = pathname === item.href;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                "flex items-center gap-4 px-8 py-4.5 transition-all duration-200 relative group",
+                isActive 
+                  ? "bg-gray-50 text-black border-r-4 border-blue-600" 
+                  : "text-gray-500 hover:bg-gray-50/50 hover:text-black"
+              )}
+            >
+              <item.icon className={cn(
+                "w-[22px] h-[22px]", 
+                isActive ? "text-blue-600" : "text-gray-400 group-hover:text-black"
+              )} />
+              <span className={cn(
+                "font-bold text-[15px]",
+                isActive ? "text-black" : "text-gray-500"
+              )}>
+                {item.label}
+              </span>
+            </Link>
+          );
+        })}
       </nav>
 
-      <div className="mt-auto space-y-2 pt-6 border-t border-white/5">
-        <Dialog>
-          <DialogTrigger render={
-            <button className="flex items-center gap-3 px-4 py-3 rounded-xl text-muted-foreground hover:bg-white/5 hover:text-white w-full transition-colors">
-              <Settings className="w-5 h-5" />
-              <span className="font-medium">Settings</span>
-            </button>
-          } />
-          <DialogContent className="sm:max-w-md bg-transparent border-none p-0 shadow-none ring-0">
-            <ApiKeySettings />
-          </DialogContent>
-        </Dialog>
-        
-        <div className="p-4 rounded-2xl bg-white/5 border border-white/5 mt-4">
-          <p className="text-xs text-muted-foreground mb-2 leading-relaxed">
-            Multi-input active. (Local + Shared)
-          </p>
-          <div className="h-1 w-full bg-white/10 rounded-full overflow-hidden">
-            <div className="h-full bg-primary w-3/4 rounded-full" />
-          </div>
+      <div className="p-8 mt-auto border-t border-gray-50">
+        <div className="flex items-center gap-2 mb-2">
+          <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+            System Online
+          </span>
         </div>
+        <p className="text-[11px] text-gray-400 leading-relaxed font-medium">
+          Accelerated Image Recognition enabled via GPT-4o.
+        </p>
       </div>
     </div>
   );

@@ -13,6 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 import { Sidebar } from "@/components/Sidebar";
+import { TopBar } from "@/components/TopBar";
 import { Toaster } from "@/components/ui/sonner";
 
 export default function RootLayout({
@@ -23,15 +24,18 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="h-full flex flex-row bg-background text-foreground selection:bg-primary/30">
-        <Sidebar />
-        <main className="flex-1 h-full overflow-y-auto relative gradient-bg">
-          <div className="max-w-7xl mx-auto p-8 min-h-full flex flex-col">
-            {children}
-          </div>
-        </main>
+      <body className="h-full flex flex-row bg-background text-foreground selection:bg-primary/10">
+        <Sidebar divider />
+        <div className="flex-1 flex flex-col h-full overflow-hidden">
+          <TopBar />
+          <main className="flex-1 overflow-y-auto p-8 pt-6">
+            <div className="max-w-6xl mx-auto min-h-full">
+              {children}
+            </div>
+          </main>
+        </div>
         <Toaster position="top-right" expand={true} richColors />
       </body>
     </html>

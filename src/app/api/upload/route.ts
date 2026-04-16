@@ -27,9 +27,18 @@ export async function POST(req: NextRequest) {
         };
         try {
           const modelUrl = process.env.NEXT_PUBLIC_TM_MODEL_URL || "";
-          classification = await classifyImage(buffer, modelUrl);
+          
+          // Strict 5-second timeout for local/TM classification network request
+          const classTimeout = new Promise<ClassificationResult>((_, reject) => 
+            setTimeout(() => reject(new Error("TM_TIMEOUT")), 5000)
+          );
+          
+          classification = await Promise.race([
+            classifyImage(buffer, modelUrl),
+            classTimeout
+          ]);
         } catch (cErr: any) {
-          console.warn("Classification fallback active.");
+          console.warn("Classification fallback active due to:", cErr.message);
         }
 
         // Extract optional User API Keys from headers
@@ -41,13 +50,18 @@ export async function POST(req: NextRequest) {
 
         try {
           // 2. Multi-Model AI Generation (Gemini -> OpenAI)
-          aiOutput = await generateAICaptions(base64Image, classification.category, { 
-            geminiKey, 
-            openaiKey 
-          });
+          // Implement a strict 15-second timeout to prevent infinite hangs
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error("AI_PROVIDER_TIMEOUT")), 15000)
+          );
+          
+          aiOutput = await Promise.race([
+            generateAICaptions(base64Image, classification.category, { geminiKey, openaiKey }),
+            timeoutPromise
+          ]);
         } catch (err: any) {
           console.warn(`AI Vision failed: ${err.message}. Triggering Smart Simulator.`);
-          aiError = err.message.includes("quota") ? "QUOTA_EXCEEDED" : "API_ERROR";
+          aiError = err.message.includes("quota") ? "QUOTA_EXCEEDED" : (err.message === "AI_PROVIDER_TIMEOUT" ? "TIMEOUT" : "API_ERROR");
           aiOutput = getSimulatedCaptions(classification, file.name);
         }
 
@@ -59,23 +73,21 @@ export async function POST(req: NextRequest) {
           ...aiOutput,
           aiError,
           timestamp: new Date().toISOString(),
-          source: aiOutput.source
+          source: aiOutput.source || "System"
         };
-
-        // 3. Async Send to n8n (Background Storage)
-        const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
-        if (n8nWebhookUrl) {
-          fetch(n8nWebhookUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ...dataToLog, image: base64Image })
-          }).catch(e => console.warn("n8n Sync failed"));
-        }
 
         results.push(dataToLog);
       } catch (err: any) {
         console.error(`Error processing ${file.name}:`, err.message);
-        results.push({ fileName: file.name, error: "Processing failed", details: err.message });
+        results.push({ 
+          fileName: file.name, 
+          error: "Processing failed", 
+          details: err.message,
+          descriptive: "Analysis failed. Please check your API keys or try again.",
+          creative: "The vision system is currently recalibrating.",
+          category: "Error",
+          source: "System"
+        });
       }
     }
 
