@@ -19,6 +19,8 @@ interface UploadResult {
   creative?: string;
   tags?: string[];
   error?: string;
+  source?: string;
+  aiError?: string | null;
 }
 
 export function UploadForm() {

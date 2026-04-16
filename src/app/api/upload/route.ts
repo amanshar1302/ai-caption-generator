@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateAICaptions, getSimulatedCaptions } from "@/lib/ai-service";
-import { classifyImage } from "@/lib/tm-service";
+import { classifyImage, ClassificationResult } from "@/lib/tm-service";
 
 export async function POST(req: NextRequest) {
   try {
@@ -20,7 +20,11 @@ export async function POST(req: NextRequest) {
         const base64Image = buffer.toString('base64');
 
         // 1. Classification (Direct Service Call)
-        let classification = { category: "Standard", confidence: "0", heuristics: {} };
+        let classification: ClassificationResult = { 
+          category: "Standard", 
+          confidence: "0", 
+          heuristics: { orientation: "landscape", brightness: "balanced" } 
+        };
         try {
           const modelUrl = process.env.NEXT_PUBLIC_TM_MODEL_URL || "";
           classification = await classifyImage(buffer, modelUrl);
