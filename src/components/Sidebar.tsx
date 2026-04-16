@@ -2,8 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Image, Upload, Settings, Info } from "lucide-react";
+import { LayoutDashboard, Image, Upload, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogTrigger 
+} from "@/components/ui/dialog";
+import { ApiKeySettings } from "@/components/ApiKeySettings";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/" },
@@ -42,13 +50,21 @@ export function Sidebar() {
       </nav>
 
       <div className="mt-auto space-y-2 pt-6 border-t border-white/5">
-        <button className="flex items-center gap-3 px-4 py-3 rounded-xl text-muted-foreground hover:bg-white/5 hover:text-white w-full transition-colors">
-          <Settings className="w-5 h-5" />
-          <span className="font-medium">Settings</span>
-        </button>
+        <Dialog>
+          <DialogTrigger render={
+            <button className="flex items-center gap-3 px-4 py-3 rounded-xl text-muted-foreground hover:bg-white/5 hover:text-white w-full transition-colors">
+              <Settings className="w-5 h-5" />
+              <span className="font-medium">Settings</span>
+            </button>
+          } />
+          <DialogContent className="sm:max-w-md bg-transparent border-none p-0 shadow-none ring-0">
+            <ApiKeySettings />
+          </DialogContent>
+        </Dialog>
+        
         <div className="p-4 rounded-2xl bg-white/5 border border-white/5 mt-4">
           <p className="text-xs text-muted-foreground mb-2 leading-relaxed">
-            Using GPT-4o Vision for extreme accuracy.
+            Multi-input active. (Local + Shared)
           </p>
           <div className="h-1 w-full bg-white/10 rounded-full overflow-hidden">
             <div className="h-full bg-primary w-3/4 rounded-full" />

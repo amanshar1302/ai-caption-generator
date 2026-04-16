@@ -32,12 +32,19 @@ export async function POST(req: NextRequest) {
           console.warn("Classification fallback active.");
         }
 
+        // Extract optional User API Keys from headers
+        const geminiKey = req.headers.get("x-gemini-key") || undefined;
+        const openaiKey = req.headers.get("x-openai-key") || undefined;
+
         let aiOutput;
         let aiError = null;
 
         try {
           // 2. Multi-Model AI Generation (Gemini -> OpenAI)
-          aiOutput = await generateAICaptions(base64Image, classification.category);
+          aiOutput = await generateAICaptions(base64Image, classification.category, { 
+            geminiKey, 
+            openaiKey 
+          });
         } catch (err: any) {
           console.warn(`AI Vision failed: ${err.message}. Triggering Smart Simulator.`);
           aiError = err.message.includes("quota") ? "QUOTA_EXCEEDED" : "API_ERROR";

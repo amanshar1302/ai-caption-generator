@@ -15,11 +15,19 @@ export interface AIOutput {
   source: string;
 }
 
-export async function generateAICaptions(base64Image: string, category: string): Promise<AIOutput> {
+export async function generateAICaptions(
+  base64Image: string, 
+  category: string,
+  overrides?: { geminiKey?: string; openaiKey?: string }
+): Promise<AIOutput> {
+  const geminiKey = overrides?.geminiKey || process.env.GEMINI_API_KEY;
+  const openaiKey = overrides?.openaiKey || process.env.OPENAI_API_KEY;
+
   // 1. Try Google Gemini (High Quality / Often Free)
-  if (process.env.GEMINI_API_KEY) {
+  if (geminiKey) {
     try {
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const dynamicGenAI = new GoogleGenerativeAI(geminiKey);
+      const model = dynamicGenAI.getGenerativeModel({ model: "gemini-1.5-flash" });
       const prompt = `Analyze this image. Category: ${category}. Return JSON ONLY: {"descriptive": "factual description", "creative": "engaging story", "accessibility": "alt text", "tags": ["tag1", "tag2"]}`;
       
       const result = await model.generateContent([
@@ -37,16 +45,17 @@ export async function generateAICaptions(base64Image: string, category: string):
       const cleanJson = text.replace(/```json|```/gi, "").trim();
       const aiOutput = JSON.parse(cleanJson);
       
-      return { ...aiOutput, source: "gemini-vision" };
+      return { ...aiOutput, source: overrides?.geminiKey ? "gemini-user-key" : "gemini-vision" };
     } catch (err: any) {
       console.warn("Gemini Vision failed, trying OpenAI...", err.message);
     }
   }
 
   // 2. Try OpenAI (Primary)
-  if (process.env.OPENAI_API_KEY) {
+  if (openaiKey) {
     try {
-      const chatCompletion = await openai.chat.completions.create({
+      const dynamicOpenAI = new OpenAI({ apiKey: openaiKey });
+      const chatCompletion = await dynamicOpenAI.chat.completions.create({
         model: "gpt-4o",
         messages: [
           {
@@ -69,7 +78,7 @@ export async function generateAICaptions(base64Image: string, category: string):
       });
 
       const aiOutput = JSON.parse(chatCompletion.choices[0].message.content || "{}");
-      return { ...aiOutput, source: "openai-vision" };
+      return { ...aiOutput, source: overrides?.openaiKey ? "openai-user-key" : "openai-vision" };
     } catch (err: any) {
       console.warn("OpenAI Vision failed...", err.message);
       if (err.status !== 429) {

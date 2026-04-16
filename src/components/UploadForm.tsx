@@ -68,9 +68,19 @@ export function UploadForm() {
       formData.append("name", name);
       formData.append("images", file);
 
+      // Get local keys for header-based bypass
+      const localGeminiKey = localStorage.getItem("gemini_api_key") || "";
+      const localOpenaiKey = localStorage.getItem("openai_api_key") || "";
+      const localTmUrl = localStorage.getItem("tm_model_url") || "";
+
       try {
         addLog(`Analyzing ${file.name} with AI Vision...`);
         const { data } = await axios.post("/api/upload", formData, {
+          headers: {
+            "x-gemini-key": localGeminiKey,
+            "x-openai-key": localOpenaiKey,
+            "x-tm-model-url": localTmUrl
+          },
           onUploadProgress: (progressEvent) => {
             const p = Math.round((progressEvent.loaded * 100) / (progressEvent.total || 100));
             // Just for visual effect 
