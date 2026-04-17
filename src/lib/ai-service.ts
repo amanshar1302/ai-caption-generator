@@ -34,19 +34,54 @@ Return format (and nothing else):
 {"descriptive": "...", "creative": "...", "accessibility": "...", "tags": ["tag1", "tag2", "tag3"]}
 `.trim();
 
+/**
+ * Detect the MIME type of an image from its base64-encoded bytes.
+ * Falls back to image/jpeg if unknown.
+ */
+function detectMimeType(base64: string): string {
+  const header = base64.substring(0, 16);
+  const bytes = Buffer.from(header, 'base64');
+  if (bytes[0] === 0x89 && bytes[1] === 0x50) return "image/png";
+  if (bytes[0] === 0x47 && bytes[1] === 0x49) return "image/gif";
+  if (bytes[0] === 0x52 && bytes[8] === 0x57) return "image/webp";
+  return "image/jpeg"; // default
+}
+
 export async function generateAICaptions(
   base64Image: string, 
   category: string,
   overrides?: { geminiKey?: string, openaiKey?: string }
 ): Promise<AIOutput> {
-  const geminiKey = APP_CONFIG.GEMINI_API_KEY || overrides?.geminiKey || process.env.GEMINI_API_KEY;
-  const openaiKey = APP_CONFIG.OPENAI_API_KEY || overrides?.openaiKey || process.env.OPENAI_API_KEY;
+  // Priority 1: Server-side environment variables (Supreme priority for security/stability)
+  // Priority 2: Client-side overrides (only if server env is missing)
+  // Priority 3: Baked-in config fallback
+  
+  const envOpenAI = process.env.OPENAI_API_KEY;
+  const envGemini = process.env.GEMINI_API_KEY;
+
+  const openaiKey = (envOpenAI && envOpenAI.trim() !== "")
+    ? envOpenAI
+    : ((overrides?.openaiKey && overrides.openaiKey.trim() !== "") ? overrides.openaiKey : APP_CONFIG.OPENAI_API_KEY);
+
+  const geminiKey = (envGemini && envGemini.trim() !== "")
+    ? envGemini
+    : ((overrides?.geminiKey && overrides.geminiKey.trim() !== "") ? overrides.geminiKey : APP_CONFIG.GEMINI_API_KEY);
+
+  // Masked logging for debugging (only showing prefix/suffix)
+  const mask = (key?: string) => key ? `${key.substring(0, 8)}...${key.substring(key.length - 4)}` : "MISSING";
+  console.log(`[AI-Pipeline] Using OpenAI Key: ${mask(openaiKey)}`);
+  console.log(`[AI-Pipeline] Using Gemini Key: ${mask(geminiKey)}`);
+
   const prompt = CAPTION_PROMPT(category);
+  const mimeType = detectMimeType(base64Image);
 
   // 1. Try Google Gemini
-  if (geminiKey) {
-    const dynamicGenAI = new GoogleGenerativeAI(geminiKey);
-    const modelsToTry = ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-pro-vision"];
+  // Only attempt if the key looks valid (Google AI Studio keys start with "AIza")
+  const isValidGeminiKey = geminiKey && geminiKey.startsWith("AIza");
+  if (isValidGeminiKey) {
+    const dynamicGenAI = new GoogleGenerativeAI(geminiKey!);
+    // gemini-pro-vision is deprecated — only try current models
+    const modelsToTry = ["gemini-1.5-flash", "gemini-1.5-pro"];
 
     for (const modelName of modelsToTry) {
       try {
@@ -54,11 +89,20 @@ export async function generateAICaptions(
           model: modelName,
           generationConfig: { temperature: 1.2, topP: 0.95 }
         });
-        const result = await model.generateContent([
-          prompt,
-          { inlineData: { data: base64Image, mimeType: "image/jpeg" } }
+
+        // 6-second per-model timeout so failures are fast
+        const modelTimeout = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("MODEL_TIMEOUT")), 6000)
+        );
+
+        const result = await Promise.race([
+          model.generateContent([
+            prompt,
+            { inlineData: { data: base64Image, mimeType } }
+          ]),
+          modelTimeout
         ]);
-        
+
         const text = result.response.text();
         const cleanJson = text.replace(/```json|```/gi, "").trim();
         const aiOutput = JSON.parse(cleanJson);
@@ -67,32 +111,53 @@ export async function generateAICaptions(
         console.warn(`Gemini Warning: Model ${modelName} failed -`, err.message);
       }
     }
+  } else if (geminiKey) {
+    console.warn("Gemini key format invalid (must start with 'AIza'). Skipping Gemini.");
   }
 
   // 2. Try OpenAI GPT-4o Vision
   if (openaiKey) {
     try {
       const dynamicOpenAI = new OpenAI({ apiKey: openaiKey });
-      const chatCompletion = await dynamicOpenAI.chat.completions.create({
-        model: "gpt-4o",
-        temperature: 1.1,
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: prompt },
-              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64Image}`, detail: "high" } },
-            ],
-          },
-        ],
-        response_format: { type: "json_object" },
-      });
+      
+      // 30-second timeout for OpenAI call (Vision can be slow)
+      const openaiTimeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("OPENAI_TIMEOUT")), 30000)
+      );
+
+      const chatCompletion = await Promise.race([
+        dynamicOpenAI.chat.completions.create({
+          model: "gpt-4o",
+          temperature: 1.1,
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: prompt },
+                { type: "image_url", image_url: { url: `data:${mimeType};base64,${base64Image}`, detail: "auto" } },
+              ],
+            },
+          ],
+          response_format: { type: "json_object" },
+        }),
+        openaiTimeout
+      ]);
 
       const aiOutput = JSON.parse(chatCompletion.choices[0].message.content || "{}");
       return { ...aiOutput, source: "openai-vision" };
     } catch (err: any) {
       console.warn("OpenAI Vision failed...", err.message);
-      if (err.status !== 429) throw err;
+      
+      // Categorize the error for the route handler
+      if (err.message.includes("quota") || err.status === 429) {
+        throw new Error("QUOTA_EXCEEDED");
+      }
+      if (err.message.includes("API key") || err.status === 401) {
+        throw new Error("INVALID_KEY");
+      }
+      if (err.message === "OPENAI_TIMEOUT") throw err;
+      
+      throw new Error(`OPENAI_ERROR: ${err.message}`);
     }
   }
 

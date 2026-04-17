@@ -12,6 +12,12 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+export const metadata: Metadata = {
+  title: "AuraCaption AI | Next-Gen AI Caption Generator",
+  description: "Transform your photos into engaging social media content with Google Gemini and GPT-4o Vision. Factual, Creative, and Accessibility captions in seconds.",
+  keywords: ["AI", "Caption Generator", "Social Media", "Instagram", "Accessibility", "Vision AI"],
+};
+
 import { Sidebar } from "@/components/Sidebar";
 import { TopBar } from "@/components/TopBar";
 import { Toaster } from "@/components/ui/sonner";

@@ -30,9 +30,9 @@ export async function POST(req: NextRequest) {
         try {
           const modelUrl = process.env.NEXT_PUBLIC_TM_MODEL_URL || "";
           
-          // Strict 5-second timeout for local/TM classification network request
+          // 10-second timeout for local/TM classification network request
           const classTimeout = new Promise<ClassificationResult>((_, reject) => 
-            setTimeout(() => reject(new Error("TM_TIMEOUT")), 5000)
+            setTimeout(() => reject(new Error("TM_TIMEOUT")), 10000)
           );
           
           classification = await Promise.race([
@@ -52,9 +52,9 @@ export async function POST(req: NextRequest) {
 
         try {
           // 2. Multi-Model AI Generation (Gemini -> OpenAI)
-          // Implement a strict 15-second timeout to prevent infinite hangs
+          // Implement a strict 45-second timeout to allow for Vision API latency
           const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error("AI_PROVIDER_TIMEOUT")), 15000)
+            setTimeout(() => reject(new Error("AI_PROVIDER_TIMEOUT")), 45000)
           );
           
           aiOutput = await Promise.race([
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
           ]);
         } catch (err: any) {
           console.warn(`AI Vision failed: ${err.message}. Triggering Smart Simulator.`);
-          aiError = err.message.includes("quota") ? "QUOTA_EXCEEDED" : (err.message === "AI_PROVIDER_TIMEOUT" ? "TIMEOUT" : "API_ERROR");
+          aiError = err.message === "QUOTA_EXCEEDED" ? "QUOTA_EXCEEDED" : (err.message === "OPENAI_TIMEOUT" || err.message === "AI_PROVIDER_TIMEOUT" ? "TIMEOUT" : "API_ERROR");
           aiOutput = getSimulatedCaptions(classification, file.name);
         }
 

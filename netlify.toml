@@ -1,14 +1,14 @@
 [build]
-  command = "npm install --legacy-peer-deps --ignore-scripts && npm run build"
+  command = "npm run build"
   publish = ".next"
 
 [build.environment]
   NODE_VERSION = "22"
-  NPM_FLAGS = "--legacy-peer-deps"
+  NEXT_USE_NETLIFY_EDGE = "false"
 
 [functions]
   node_bundler = "nft"
-  external_node_modules = ["canvas"]
+  external_node_modules = ["canvas", "@tensorflow/tfjs", "@teachablemachine/image"]
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"

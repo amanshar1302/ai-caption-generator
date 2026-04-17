@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Upload as UploadIcon, Loader2, Image as ImageIcon, CheckCircle2, Search } from "lucide-react";
+import { Upload as UploadIcon, Loader2, CheckCircle2, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
@@ -23,10 +23,18 @@ export function UploadForm() {
   const [isDragActive, setIsDragActive] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [logs, setLogs] = useState<string[]>([]);
+  const [stepIndex, setStepIndex] = useState(0);
   const [result, setResult] = useState<UploadResult | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const STEPS = [
+    "Uploading image...",
+    "Classifying content...",
+    "Running AI vision pipeline...",
+    "Generating captions...",
+    "Finalizing results...",
+  ];
 
   const handleFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -40,20 +48,31 @@ export function UploadForm() {
     setPreview(URL.createObjectURL(file));
     setUploading(true);
     setProgress(0);
+    setStepIndex(0);
     setResult(null);
-    setLogs(["Initializing upload..."]);
+
+    // Advance steps on a timer to give visual feedback during AI processing
+    let step = 0;
+    const stepDelays = [600, 1200, 2000, 3500]; // ms between steps
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    let elapsed = 0;
+    stepDelays.forEach((delay) => {
+      elapsed += delay;
+      timers.push(setTimeout(() => {
+        step++;
+        setStepIndex(step);
+        setProgress(Math.min(20 + step * 18, 90));
+      }, elapsed));
+    });
 
     const formData = new FormData();
     formData.append("images", file);
     formData.append("name", "Dashboard User");
 
     try {
-      // Get local keys for header-based bypass
       const localGeminiKey = localStorage.getItem("gemini_api_key") || "";
       const localOpenaiKey = localStorage.getItem("openai_api_key") || "";
       const localTmUrl = localStorage.getItem("tm_model_url") || "";
-
-      setLogs(prev => [...prev, "Extracting features...", "Starting AI vision pipeline..."]);
 
       const { data } = await axios.post("/api/upload", formData, {
         headers: {
@@ -61,20 +80,19 @@ export function UploadForm() {
           "x-openai-key": localOpenaiKey,
           "x-tm-model-url": localTmUrl
         },
-        onUploadProgress: (progressEvent) => {
-          const p = Math.round((progressEvent.loaded * 100) / (progressEvent.total || 100));
-          setProgress(p);
-        }
       });
 
-      setLogs(prev => [...prev, "Analysis complete. Waiting for validation..."]);
+      timers.forEach(clearTimeout);
+      setProgress(100);
+      setStepIndex(STEPS.length - 1);
+
       const res = data.results[0];
       setResult(res);
       toast.success("Analysis complete!");
     } catch (error) {
+      timers.forEach(clearTimeout);
       console.error("Upload error:", error);
       toast.error("Failed to process image");
-      setLogs(prev => [...prev, "Critical Error: Processing failed"]);
     } finally {
       setUploading(false);
     }
@@ -84,7 +102,7 @@ export function UploadForm() {
     setResult(null);
     setPreview(null);
     setProgress(0);
-    setLogs([]);
+    setStepIndex(0);
   };
 
   return (
@@ -121,23 +139,37 @@ export function UploadForm() {
           </div>
 
           {uploading && (
-            <div className="absolute inset-0 bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center rounded-xl animate-in fade-in duration-300 z-10 p-10">
-              <div className="w-full max-w-[280px] space-y-6">
-                <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-widest text-blue-600">
-                  <span className="flex items-center gap-2">
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                    Analyzing...
+            <div className="absolute inset-0 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center rounded-xl animate-in fade-in duration-300 z-10 p-10">
+              <div className="w-full max-w-[260px] space-y-5">
+                {/* Spinner + label */}
+                <div className="flex items-center gap-3 text-blue-600">
+                  <Loader2 className="w-5 h-5 animate-spin shrink-0" />
+                  <span className="text-[11px] font-bold uppercase tracking-widest">
+                    {STEPS[stepIndex]}
                   </span>
-                  <span>{progress}%</span>
                 </div>
+
+                {/* Progress bar */}
                 <Progress value={progress} className="h-1.5 bg-gray-100" />
-                
-                {/* Live Logs */}
-                <div className="bg-gray-50 rounded-lg p-3 font-mono text-[9px] text-left space-y-1 text-gray-500 border border-gray-100 max-h-20 overflow-hidden">
-                  {logs.map((log, i) => (
-                    <div key={i} className="flex gap-2">
-                      <span className="text-blue-500 opacity-50">›</span>
-                      <span>{log}</span>
+
+                {/* Step checklist */}
+                <div className="space-y-2">
+                  {STEPS.map((step, i) => (
+                    <div key={step} className="flex items-center gap-2.5">
+                      <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 transition-colors duration-300 ${
+                        i < stepIndex ? "bg-green-500" : i === stepIndex ? "bg-blue-500 animate-pulse" : "bg-gray-100"
+                      }`}>
+                        {i < stepIndex && (
+                          <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </div>
+                      <span className={`text-[10px] font-medium transition-colors duration-300 ${
+                        i < stepIndex ? "text-green-600" : i === stepIndex ? "text-blue-600 font-bold" : "text-gray-300"
+                      }`}>
+                        {step}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -149,7 +181,19 @@ export function UploadForm() {
 
       {/* Result View */}
       {result && (
-        <div className="bg-white border border-gray-100 rounded-2xl p-8 shadow-[0_2px_10px_rgba(0,0,0,0.02)] animate-in slide-in-from-bottom-4 duration-700">
+        <div className="bg-white border border-gray-100 rounded-2xl p-8 shadow-[0_2px_10px_rgba(0,0,0,0.02)] animate-in slide-in-from-bottom-4 duration-700 space-y-6">
+
+          {/* Simulator Warning Banner */}
+          {result.source?.includes("simulator") && (
+            <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800">
+              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-500" />
+              <div className="text-xs leading-relaxed">
+                <span className="font-bold block mb-0.5">AI Vision unavailable — showing estimated captions</span>
+                The AI vision API could not analyse this specific image (quota exceeded or invalid key). These captions are generated from visual heuristics only, not actual image content. Add a valid Gemini or OpenAI key in Settings to get image-accurate results.
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
             <div className="space-y-6">
               <div className="aspect-square rounded-xl overflow-hidden border border-gray-100 shadow-sm relative group">
@@ -196,16 +240,21 @@ export function UploadForm() {
                 )}
               </div>
 
-              <div className="pt-6 border-t border-gray-50 flex items-center justify-between text-[10px] font-bold text-gray-300 uppercase tracking-widest leading-none">
-                <span className="flex items-center gap-2">
-                   Processed by <span className="text-blue-600">{result.source}</span>
+              <div className="pt-6 border-t border-gray-50 flex items-center justify-between text-[10px] font-bold uppercase tracking-widest leading-none">
+                <span className="flex items-center gap-2 text-gray-300">
+                   Processed by{" "}
+                   <span className={cn(
+                     result.source?.includes("simulator") ? "text-amber-500" : "text-blue-600"
+                   )}>
+                     {result.source}
+                   </span>
                 </span>
                 <span className={cn(
                   "flex items-center gap-2",
-                  result.error ? "text-red-400" : "text-green-500/50"
+                  result.error ? "text-red-400" : result.source?.includes("simulator") ? "text-amber-400" : "text-green-500/50"
                 )}>
                   <CheckCircle2 className="w-3 h-3" />
-                  {result.error ? "Pipeline Error" : "Pipeline Ready"}
+                  {result.error ? "Pipeline Error" : result.source?.includes("simulator") ? "Fallback Active" : "Pipeline Ready"}
                 </span>
               </div>
             </div>
