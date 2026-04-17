@@ -1,14 +1,14 @@
-# AI Image Captioning Dashboard
+# AuraCaption AI Dashboard
 
-A production-ready, resilient AI image analysis and caption generation platform built with Next.js 16, Gemini Vision Pro, and n8n orchestration.
+A premium, production-ready AI image analysis and caption generation platform built with Next.js 15, Gemini Vision, and n8n orchestration.
 
 ## 🚀 Key Features
 
-- **Multi-Model AI Pipeline**: Automatically analyzes images using **Gemini 2.5 Flash** (Primary) or **OpenAI GPT-4o** (Backup).
-- **Graceful Fallback (Simulator)**: If AI APIs are unavailable or quotas are exceeded, a visual heuristic engine analyzes image orientation and brightness to provide context-aware metadata.
-- **n8n Orchestration**: Powered by an n8n workflow for secure, zero-credential proxying to Google Sheets and external APIs.
-- **Premium UI/UX**: Dark-themed, glassmorphic dashboard featuring real-time feedback, interactive gallery, and detailed asset analytics.
-- **Netlify Ready**: "eslint-config-next": "15.0.3", build pipeline with `netlify.toml` and serverless function optimizations.
+- **Multi-Model AI Vision**: Automatically analyzes images using **GPT-4o Vision** or **Gemini 1.5** with intelligent failover.
+- **Real-Time Progress Tracking**: Animated step-by-step progress checklist for high transparency during AI analysis.
+- **Graceful Fallback**: Visual heuristic engine provides "Estimated Captions" if AI quotas are exceeded.
+- **Modern UI/UX**: Clean, minimal, light-themed interface with vibrant accents and smooth animations.
+- **Netlify Ready**: Optimized build pipeline for stable production deployment with native dependency support.
 
 ## 🛠️ Setup Instructions
 
